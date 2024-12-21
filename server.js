@@ -1,6 +1,10 @@
+require("dotenv").config();
 const express = require("express");
+const db = require("./db");
+const port = process.env.PORT || 8000
+
+
 const app = express();
-const port = 8000
 
 app.use(express.json());
 
