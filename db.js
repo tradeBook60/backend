@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
+const config = require("./config");
 
-var mongoURL = process.env.DB_STRING;
+var mongoURL = config.DB;
 
 mongoose.connect(mongoURL);
 
