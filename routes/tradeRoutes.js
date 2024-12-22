@@ -1,9 +1,15 @@
-const router = require("express").Router();
+const express = require("express");
+const { createTrade, getTrades, updateTrade, deleteTrade } = require("../controllers/tradeController");
 const { authenticateToken } = require("../middleware/authenticateToken");
 
-router.get("/trades", authenticateToken, (req, res) => {
-    return "Trades are here"
-});
-  
+const router = express.Router();
+
+router.post("/", authenticateToken, createTrade);
+
+router.get("/", authenticateToken, getTrades);
+
+router.patch("/:id", authenticateToken, updateTrade);
+
+router.delete("/:id", authenticateToken, deleteTrade);
 
 module.exports = router;
