@@ -200,30 +200,99 @@ const calculatePnL = async (req, res) => {
     }
   };
 
+// const calculatePnLByPeriod = async (req, res) => {
+//   try {
+//     const userId = req.user._id;
+//     const { period } = req.params; // "month" or "year"
+
+//     const startDate = new Date();
+//     if (period === "month") {
+//       startDate.setDate(1);
+//     } else if (period === "year") {
+//       startDate.setMonth(0, 1);
+//     }
+
+//     const trades = await Trade.find({ userId, tradeDate: { $gte: startDate } });
+
+//     const profit = trades.reduce((acc, trade) => {
+//       acc += trade.tradeType === "sell" ? trade.netValue : -trade.netValue;
+//       return acc;
+//     }, 0);
+
+//     res.status(200).json({ period, profit });
+//   } catch (error) {
+//     res.status(500).json({ message: "Error calculating PnL by period", error });
+//   }
+// };
+
 const calculatePnLByPeriod = async (req, res) => {
-  try {
-    const userId = req.user._id;
-    const { period } = req.params; // "month" or "year"
-
-    const startDate = new Date();
-    if (period === "month") {
-      startDate.setDate(1);
-    } else if (period === "year") {
-      startDate.setMonth(0, 1);
+    try {
+      const userId = req.user._id;
+      const { period } = req.params; // "month" or "year"
+  
+      const startDate = new Date();
+      if (period === "month") {
+        startDate.setDate(1); // Start of the current month
+      } else if (period === "year") {
+        startDate.setMonth(0, 1); // Start of the current year
+      }
+  
+      const trades = await Trade.find({ 
+        userId, 
+        tradeDate: { $gte: startDate } 
+      });
+  
+      let assetData = {};
+  
+      trades.forEach(trade => {
+        const { asset, tradeType, quantity, price, netValue, commission, fees } = trade;
+  
+        if (!assetData[asset]) {
+          assetData[asset] = {
+            asset,
+            totalBuyValue: 0,
+            totalBuyQuantity: 0,
+            totalSellValue: 0,
+            totalSellQuantity: 0,
+            averageBuyPrice: 0,
+            profitBooked: 0,
+            remainingQuantity: 0,
+          };
+        }
+  
+        if (tradeType === "buy") {
+          assetData[asset].totalBuyValue += netValue;
+          assetData[asset].totalBuyQuantity += quantity;
+          assetData[asset].remainingQuantity += quantity;
+        }
+  
+        if (tradeType === "sell" && assetData[asset].remainingQuantity > 0) {
+          const averageBuyPrice = assetData[asset].totalBuyValue / assetData[asset].totalBuyQuantity;
+          const sellPrice = price;
+          const soldQuantity = quantity;
+  
+          const sellValue = sellPrice * soldQuantity;
+          const profit = (sellValue - (soldQuantity * averageBuyPrice)) - commission - fees;
+  
+          assetData[asset].profitBooked += profit;
+  
+          assetData[asset].remainingQuantity -= soldQuantity;
+          assetData[asset].totalSellValue += sellValue;
+          assetData[asset].totalSellQuantity += soldQuantity;
+        }
+      });
+  
+      const totalProfit = Object.values(assetData).reduce((acc, asset) => acc + asset.profitBooked, 0);
+  
+      res.status(200).json({
+        period,
+        profitBooked: totalProfit,
+      });
+    } catch (error) {
+      res.status(500).json({ message: "Error calculating PnL by period", error });
     }
-
-    const trades = await Trade.find({ userId, tradeDate: { $gte: startDate } });
-
-    const profit = trades.reduce((acc, trade) => {
-      acc += trade.tradeType === "sell" ? trade.netValue : -trade.netValue;
-      return acc;
-    }, 0);
-
-    res.status(200).json({ period, profit });
-  } catch (error) {
-    res.status(500).json({ message: "Error calculating PnL by period", error });
-  }
-};
+  };
+  
 
 module.exports = {
   addTrade,
