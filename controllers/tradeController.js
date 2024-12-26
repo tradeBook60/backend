@@ -108,34 +108,97 @@ const deleteTrade = async (req, res) => {
 };
 
 const calculatePnL = async (req, res) => {
-  try {
-    const userId = req.user._id;
-    const trades = await Trade.find({ userId });
-
-    const assetPnL = trades.reduce((acc, trade) => {
-      const asset = acc[trade.asset] || {
-        buy: 0,
-        sell: 0,
-        quantity: 0,
-        profit: 0,
-      };
-      if (trade.tradeType === "buy") {
-        asset.buy += trade.netValue;
-        asset.quantity += trade.quantity;
-      } else if (trade.tradeType === "sell") {
-        asset.sell += trade.netValue;
-        asset.quantity -= trade.quantity;
+    try {
+      const trades = await Trade.find({ userId: req.user._id });
+  
+      let assetData = {};
+      trades.forEach(trade => {
+        const { asset, tradeType, quantity, price, netValue, commission, fees, createdAt } = trade;
+  
+        if (!assetData[asset]) {
+          assetData[asset] = {
+            asset,
+            totalBuyValue: 0,
+            totalSellValue: 0,
+            totalBuyQuantity: 0,
+            totalSellQuantity: 0,
+            averageBuyPrice: 0,
+            profit: 0,
+            remainingQuantity: 0,
+            open: true, // Initially trade is open
+            totalBuyCommission: 0,
+            totalBuyFees: 0,
+            totalSellCommission: 0,
+            totalSellFees: 0,
+            createdAt: createdAt
+          };
+        }
+  
+        if (tradeType === "buy") {
+          assetData[asset].totalBuyValue += netValue;
+          assetData[asset].totalBuyQuantity += quantity;
+          assetData[asset].remainingQuantity += quantity;
+          assetData[asset].totalBuyCommission += commission;
+          assetData[asset].totalBuyFees += fees;
+        }
+  
+        if (tradeType === "sell") {
+          // Calculate profit only for the sold quantity based on the average buy price
+          if (assetData[asset].remainingQuantity > 0) {
+            const sellPrice = price;
+            const averageBuyPrice = assetData[asset].totalBuyValue / assetData[asset].totalBuyQuantity;
+            const soldQuantity = quantity;
+  
+            // Profit for sold quantity
+            const sellValue = sellPrice * soldQuantity;
+            const profit = (sellValue - (soldQuantity * averageBuyPrice)) - commission - fees;
+            assetData[asset].profit += profit;
+  
+            // Update remaining quantity after sale
+            assetData[asset].remainingQuantity -= soldQuantity;
+            assetData[asset].totalSellValue += sellValue;
+            assetData[asset].totalSellQuantity += soldQuantity;
+            assetData[asset].totalSellCommission += commission;
+            assetData[asset].totalSellFees += fees;
+            assetData[asset].createdAt = createdAt;
+          }
+        }
+  
+        // Close trade if buy quantity matches sell quantity
+        if (assetData[asset].remainingQuantity === 0) {
+          assetData[asset].open = false;
+        }
+      });
+  
+      // Calculate average buy price and PnL for each asset
+      for (let asset in assetData) {
+        const assetInfo = assetData[asset];
+        
+        // If there are any buys, calculate the average buy price
+        if (assetInfo.totalBuyQuantity > 0) {
+          assetInfo.averageBuyPrice = assetInfo.totalBuyValue / assetInfo.totalBuyQuantity;
+        }
+  
+        // If remaining quantity is 0, close the trade
+        if (assetInfo.remainingQuantity === 0) {
+          assetInfo.open = false;
+        }
       }
-      asset.profit = asset.sell - asset.buy;
-      acc[trade.asset] = asset;
-      return acc;
-    }, {});
-
-    res.status(200).json(assetPnL);
-  } catch (error) {
-    res.status(500).json({ message: "Error calculating PnL", error });
-  }
-};
+  
+      // Return PnL data for each asset
+      res.status(200).json({
+        status: "success",
+        data: Object.values(assetData),
+      });
+  
+    } catch (error) {
+      console.error("Error calculating PnL:", error);
+      res.status(500).json({
+        status: "error",
+        message: "Something went wrong while calculating PnL",
+      });
+    }
+  };
 
 const calculatePnLByPeriod = async (req, res) => {
   try {
