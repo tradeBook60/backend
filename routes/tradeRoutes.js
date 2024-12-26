@@ -1,15 +1,26 @@
 const express = require("express");
-const { createTrade, getTrades, updateTrade, deleteTrade } = require("../controllers/tradeController");
+const {
+  addTrade,
+  getAllTrades,
+  calculatePnL,
+  calculatePnLByPeriod,
+  deleteTrade,
+  updateTrade,
+} = require("../controllers/tradeController");
 const { authenticateToken } = require("../middleware/authenticateToken");
 
 const router = express.Router();
 
-router.post("/", authenticateToken, createTrade);
+router.post("/", authenticateToken, addTrade);
 
-router.get("/", authenticateToken, getTrades);
+router.get("/", authenticateToken, getAllTrades);
+
+router.delete("/:id", authenticateToken, deleteTrade);
 
 router.patch("/:id", authenticateToken, updateTrade);
 
-router.delete("/:id", authenticateToken, deleteTrade);
+router.get("/pnl", authenticateToken, calculatePnL);
+
+router.get("/pnl/:period", authenticateToken, calculatePnLByPeriod);
 
 module.exports = router;
